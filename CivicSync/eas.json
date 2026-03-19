@@ -1,0 +1,26 @@
+{
+  "cli": {
+    "version": ">= 10.2.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://mzihnhmioiwomogjlkir.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16aWhuaG1pb2l3b21vZ2psa2lyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MTg3NjksImV4cCI6MjA4OTA5NDc2OX0.etpu8H21o_r8qVyupQrrmuZQvwecUC97GXkJ1Htr1EQ"
+      }
+    },
+    "production": {}
+  },
+  "submit": {
+    "production": {}
+  }
+}
