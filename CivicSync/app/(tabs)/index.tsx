@@ -44,15 +44,46 @@ const STATUS_COLORS: Record<string, string> = {
 export default function HomeScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
+
   const [issues, setIssues] = useState<Issue[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ total: 0, resolved: 0, open: 0 });
 
+  const [aqiValue, setAqiValue] = useState("--");
+  const [aqiStatus, setAqiStatus] = useState("Loading...");
+  const [location, setLocation] = useState("Fetching location...");
+
+  const API_KEY = "1a192eb540b9e042b3207edc7b7e1db5";
+
+  const getAQIStatus = (aqi: number) => {
+    if (aqi === 1) return "Good";
+    if (aqi === 2) return "Fair";
+    if (aqi === 3) return "Moderate";
+    if (aqi === 4) return "Poor";
+    return "Very Poor";
+  };
+
+  const fetchAQI = async () => {
+    try {
+      const res = await fetch(
+        `https://api.openweathermap.org/data/2.5/air_pollution?lat=20.2961&lon=85.8245&appid=${API_KEY}`
+      );
+      const data = await res.json();
+      const aqi = data.list[0].main.aqi;
+
+      setAqiValue(aqi.toString());
+      setAqiStatus(getAQIStatus(aqi));
+      setLocation("Bhubaneswar");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const userName = user?.user_metadata?.full_name?.split(' ')[0] ?? 'there';
 
   const fetchIssues = async () => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('issues')
       .select('*')
       .order('created_at', { ascending: false })
@@ -71,11 +102,13 @@ export default function HomeScreen() {
 
   useEffect(() => {
     fetchIssues();
+    fetchAQI();
   }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchIssues();
+    await fetchAQI();
     setRefreshing(false);
   };
 
@@ -97,7 +130,6 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1a3c70" />}>
 
-        {/* Header */}
         <View style={styles.header}>
           <View>
             <Text style={styles.welcomeText}>Welcome back,</Text>
@@ -112,23 +144,22 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Air Quality Card */}
         <View style={styles.airQualityCard}>
           <View style={styles.airQualityLeft}>
             <Text style={styles.airQualityLabel}>Current Air Quality</Text>
-            <Text style={styles.airQualityValue}>Good</Text>
+            <Text style={styles.airQualityValue}>{aqiStatus}</Text>
             <View style={styles.locationRow}>
               <Text style={styles.locationIcon}>📍</Text>
-              <Text style={styles.locationText}>Downtown District</Text>
+              <Text style={styles.locationText}>{location}</Text>
             </View>
           </View>
+
           <View style={styles.airQualityRight}>
-            <Text style={styles.aqi}>42</Text>
+            <Text style={styles.aqi}>{aqiValue}</Text>
             <Text style={styles.aqiLabel}>AQI</Text>
           </View>
         </View>
 
-        {/* Stats Row */}
         <View style={styles.statsRow}>
           <View style={[styles.statCard, { backgroundColor: '#EFF6FF' }]}>
             <Text style={[styles.statNumber, { color: '#1a3c70' }]}>{stats.total}</Text>
@@ -144,34 +175,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.quickActionsGrid}>
-            <TouchableOpacity
-              style={styles.quickAction}
-              onPress={() => router.push('/(tabs)/report')}>
-              <Text style={styles.quickActionIcon}>📋</Text>
-              <Text style={styles.quickActionLabel}>Report Issue</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickAction}
-              onPress={() => router.push('/(tabs)/map')}>
-              <Text style={styles.quickActionIcon}>🗺️</Text>
-              <Text style={styles.quickActionLabel}>View Map</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.quickAction}>
-              <Text style={styles.quickActionIcon}>📊</Text>
-              <Text style={styles.quickActionLabel}>My Issues</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.quickAction}>
-              <Text style={styles.quickActionIcon}>🔔</Text>
-              <Text style={styles.quickActionLabel}>Alerts</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Recent Activity */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Activity</Text>
@@ -223,19 +226,6 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Community Map Preview */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Community Map</Text>
-          <TouchableOpacity
-            style={styles.mapPreview}
-            onPress={() => router.push('/(tabs)/map')}>
-            <Text style={styles.mapEmoji}>🗺️</Text>
-            <Text style={styles.mapPreviewText}>Tap to view community issues map</Text>
-            <Text style={styles.mapArrow}>→</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={{ height: 20 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -245,7 +235,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F8FAFC' },
   container: { flex: 1 },
 
-  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -256,7 +245,6 @@ const styles = StyleSheet.create({
   },
   welcomeText: { fontSize: 13, color: '#64748B', fontWeight: '500' },
   nameText: { fontSize: 22, fontWeight: '800', color: '#0F1B35', marginTop: 2 },
-  avatarButton: {},
   avatar: {
     width: 44,
     height: 44,
@@ -267,7 +255,6 @@ const styles = StyleSheet.create({
   },
   avatarText: { color: '#fff', fontSize: 18, fontWeight: '700' },
 
-  // Air Quality
   airQualityCard: {
     marginHorizontal: 20,
     backgroundColor: '#1a3c70',
@@ -275,81 +262,32 @@ const styles = StyleSheet.create({
     padding: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#1a3c70',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
   },
-  airQualityLeft: { flex: 1 },
-  airQualityLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginBottom: 4 },
-  airQualityValue: { color: '#fff', fontSize: 28, fontWeight: '800', marginBottom: 6 },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  locationIcon: { fontSize: 12 },
+  airQualityLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
+  airQualityValue: { color: '#fff', fontSize: 28, fontWeight: '800' },
+  locationRow: { flexDirection: 'row', alignItems: 'center' },
   locationText: { color: 'rgba(255,255,255,0.8)', fontSize: 12 },
-  airQualityRight: { alignItems: 'center' },
+
   aqi: { color: '#4ADE80', fontSize: 40, fontWeight: '900' },
-  aqiLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: -4 },
+  aqiLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 11 },
 
-  // Stats
-  statsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginHorizontal: 20,
-    marginBottom: 24,
-  },
-  statCard: {
-    flex: 1,
-    borderRadius: 16,
-    padding: 14,
-    alignItems: 'center',
-  },
-  statNumber: { fontSize: 24, fontWeight: '800', marginBottom: 4 },
-  statLabel: { fontSize: 11, color: '#64748B', fontWeight: '500', textAlign: 'center' },
+  statsRow: { flexDirection: 'row', gap: 12, marginHorizontal: 20, marginBottom: 24 },
+  statCard: { flex: 1, borderRadius: 16, padding: 14, alignItems: 'center' },
+  statNumber: { fontSize: 24, fontWeight: '800' },
+  statLabel: { fontSize: 11, color: '#64748B' },
 
-  // Sections
   section: { marginHorizontal: 20, marginBottom: 24 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#0F1B35', marginBottom: 14 },
-  seeAll: { fontSize: 13, color: '#1a3c70', fontWeight: '600' },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between' },
+  sectionTitle: { fontSize: 18, fontWeight: '700' },
+  seeAll: { fontSize: 13, color: '#1a3c70' },
 
-  // Quick Actions
-  quickActionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  quickAction: {
-    flex: 1,
-    minWidth: '44%',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  quickActionIcon: { fontSize: 28, marginBottom: 8 },
-  quickActionLabel: { fontSize: 12, fontWeight: '600', color: '#374151', textAlign: 'center' },
-
-  // Activity Cards
   activityCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 16,
     flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
   },
   activityIconContainer: {
     width: 44,
@@ -362,47 +300,24 @@ const styles = StyleSheet.create({
   },
   activityEmoji: { fontSize: 22 },
   activityContent: { flex: 1 },
-  activityTitle: { fontSize: 14, fontWeight: '700', color: '#0F1B35', marginBottom: 2 },
-  activityDesc: { fontSize: 12, color: '#64748B', marginBottom: 4 },
-  activityMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  activityTitle: { fontSize: 14, fontWeight: '700' },
+  activityDesc: { fontSize: 12, color: '#64748B' },
+  activityMeta: { flexDirection: 'row', alignItems: 'center' },
   activityTime: { fontSize: 11, color: '#94A3B8' },
-  activityDot: { fontSize: 11, color: '#94A3B8' },
-  activityCode: { fontSize: 11, color: '#1a3c70', fontWeight: '600' },
+  activityDot: { marginHorizontal: 4 },
+  activityCode: { fontSize: 11 },
+
   statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   statusText: { fontSize: 11, fontWeight: '700' },
 
-  // Map Preview
-  mapPreview: {
-    backgroundColor: '#1a3c70',
-    borderRadius: 20,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  mapEmoji: { fontSize: 32 },
-  mapPreviewText: { flex: 1, color: 'rgba(255,255,255,0.9)', fontSize: 14, fontWeight: '600' },
-  mapArrow: { color: '#fff', fontSize: 20, fontWeight: '700' },
+  loadingContainer: { alignItems: 'center', paddingVertical: 40 },
+  loadingText: { fontSize: 14, color: '#94A3B8' },
 
-  // Loading & Empty states
-  loadingContainer: { alignItems: 'center', paddingVertical: 40, gap: 12 },
-  loadingText: { fontSize: 14, color: '#94A3B8', fontWeight: '500' },
-  emptyContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 32,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  emptyEmoji: { fontSize: 48, marginBottom: 12 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#0F1B35', marginBottom: 6 },
-  emptySubtitle: { fontSize: 13, color: '#94A3B8', textAlign: 'center', marginBottom: 20 },
-  emptyButton: {
-    backgroundColor: '#1a3c70',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  emptyButtonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  emptyContainer: { alignItems: 'center', padding: 32 },
+  emptyEmoji: { fontSize: 48 },
+  emptyTitle: { fontSize: 16, fontWeight: '700' },
+  emptySubtitle: { fontSize: 13, color: '#94A3B8' },
+
+  emptyButton: { backgroundColor: '#1a3c70', padding: 12, borderRadius: 12 },
+  emptyButtonText: { color: '#fff' },
 });
