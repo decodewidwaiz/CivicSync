@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as Location from 'expo-location';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 
@@ -48,6 +49,8 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ total: 0, resolved: 0, open: 0 });
+  const [aqiLoading, setAqiLoading] = useState(true);
+  const [aqiData, setAqiData] = useState({ value: 0, status: 'Loading...', location: 'Locating...' });
 
   const userName = user?.user_metadata?.full_name?.split(' ')[0] ?? 'there';
 
@@ -69,13 +72,68 @@ export default function HomeScreen() {
     setLoading(false);
   };
 
+  const getAqiStatus = (aqi: number) => {
+    if (aqi <= 50) return 'Good';
+    if (aqi <= 100) return 'Moderate';
+    if (aqi <= 150) return 'Unhealthy/Sensitive';
+    if (aqi <= 200) return 'Unhealthy';
+    if (aqi <= 300) return 'Very Unhealthy';
+    return 'Hazardous';
+  };
+
+  const fetchAqi = async () => {
+    try {
+      setAqiLoading(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setAqiData({ value: 0, status: 'Perm Denied', location: 'Unknown' });
+        setAqiLoading(false);
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const lat = location.coords.latitude;
+      const lon = location.coords.longitude;
+
+      let locName = 'Your Area';
+      try {
+        const geo = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
+        if (geo && geo.length > 0) {
+          locName = geo[0].city || geo[0].district || geo[0].region || 'Your Area';
+        }
+      } catch (e) {
+        console.log('Geocode error', e);
+      }
+
+      const res = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi`);
+      const data = await res.json();
+      
+      if (data && data.current && data.current.us_aqi !== undefined) {
+        const aqiValue = data.current.us_aqi;
+        setAqiData({
+          value: Math.round(aqiValue),
+          status: getAqiStatus(aqiValue),
+          location: locName
+        });
+      } else {
+        setAqiData({ value: 0, status: 'Unavailable', location: locName });
+      }
+    } catch (err) {
+      console.log('AQI Fetch error', err);
+      setAqiData({ value: 0, status: 'Error', location: 'Unknown' });
+    } finally {
+      setAqiLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchIssues();
+    fetchAqi();
   }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchIssues();
+    await Promise.all([fetchIssues(), fetchAqi()]);
     setRefreshing(false);
   };
 
@@ -116,14 +174,22 @@ export default function HomeScreen() {
         <View style={styles.airQualityCard}>
           <View style={styles.airQualityLeft}>
             <Text style={styles.airQualityLabel}>Current Air Quality</Text>
-            <Text style={styles.airQualityValue}>Good</Text>
+            {aqiLoading ? (
+              <ActivityIndicator size="small" color="#fff" style={{ alignSelf: 'flex-start', marginVertical: 4 }} />
+            ) : (
+              <Text style={styles.airQualityValue}>{aqiData.status}</Text>
+            )}
             <View style={styles.locationRow}>
               <Text style={styles.locationIcon}>📍</Text>
-              <Text style={styles.locationText}>Downtown District</Text>
+              <Text style={styles.locationText}>{aqiData.location}</Text>
             </View>
           </View>
           <View style={styles.airQualityRight}>
-            <Text style={styles.aqi}>42</Text>
+            {aqiLoading ? (
+              <Text style={styles.aqi}>-</Text>
+            ) : (
+              <Text style={styles.aqi}>{aqiData.value}</Text>
+            )}
             <Text style={styles.aqiLabel}>AQI</Text>
           </View>
         </View>

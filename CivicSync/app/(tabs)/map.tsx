@@ -12,22 +12,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import CustomMap from '@/components/CustomMap';
+import { Ionicons } from '@expo/vector-icons';
+import CivicMapLibre, { CivicIssue } from '@/components/CivicMapLibre';
 import { supabase } from '@/lib/supabase';
-
- 
-
-interface Issue {
-  id: string;
-  title: string;
-  description: string;
-  category: string;
-  status: string;
-  location_address: string;
-  created_at: string;
-  lat?: number;
-  lng?: number;
-}
 
 const CATEGORY_EMOJIS: Record<string, string> = {
   'Road Maintenance': '🛣️',
@@ -46,15 +33,14 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }>
   closed: { bg: '#F9FAFB', text: '#6B7280', label: 'Closed' },
 };
 
-
-
 export default function MapScreen() {
   const router = useRouter();
-  const [issues, setIssues] = useState<Issue[]>([]);
+  const [issues, setIssues] = useState<CivicIssue[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
+  const [selectedIssue, setSelectedIssue] = useState<CivicIssue | null>(null);
+  const [isMapExpanded, setIsMapExpanded] = useState(false);
 
   useEffect(() => {
     fetchIssues();
@@ -67,7 +53,7 @@ export default function MapScreen() {
       .order('created_at', { ascending: false });
 
     if (data) {
-      setIssues(data as Issue[]);
+      setIssues(data as CivicIssue[]);
     }
     setLoading(false);
   };
@@ -84,7 +70,7 @@ export default function MapScreen() {
     ? issues
     : issues.filter((i) => i.category === selectedCategory);
 
-  const openMaps = (issue: Issue) => {
+  const openMaps = (issue: CivicIssue) => {
     const addr = encodeURIComponent(issue.location_address ?? issue.title);
     const url = Platform.OS === 'ios'
       ? `maps://maps.apple.com/?q=${addr}`
@@ -115,118 +101,143 @@ export default function MapScreen() {
             {loading ? 'Loading...' : `${issues.length} issue${issues.length !== 1 ? 's' : ''} in your community`}
           </Text>
         </View>
-        <TouchableOpacity
-          style={styles.reportButton}
-          onPress={() => router.push('/(tabs)/report')}>
-          <Text style={styles.reportButtonText}>+ Report</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            style={styles.expandButton}
+            onPress={() => setIsMapExpanded(!isMapExpanded)}>
+            <Ionicons
+              name={isMapExpanded ? 'contract' : 'expand'}
+              size={18}
+              color="#1a3c70"
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.reportButton}
+            onPress={() => router.push('/(tabs)/report')}>
+            <Text style={styles.reportButtonText}>+ Report</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Interactive Map */}
-      <View style={styles.mapContainer}>
-        {Platform.OS === 'web' ? (
-          <View style={[styles.mapPlaceholder, { flex: 1 }]}>
-            <Text style={styles.mapBg}>🗺️</Text>
-            <Text style={{ marginTop: 20, color: '#1a3c70', fontWeight: 'bold' }}>
-              Interactive Map unavailable on Web (Use Expo Go)
-            </Text>
-          </View>
-        ) : (
-          <CustomMap 
-             issues={filtered}
-             selectedIssueId={selectedIssue?.id || null}
-             onSelectIssue={setSelectedIssue}
-             categoryEmojis={CATEGORY_EMOJIS}
-             statusColors={STATUS_COLORS}
-          />
-        )}
+      <View style={[styles.mapContainer, isMapExpanded && styles.mapContainerExpanded]}>
+        <CivicMapLibre
+          issues={filtered}
+          selectedIssue={selectedIssue}
+          onSelectIssue={setSelectedIssue}
+          categoryEmojis={CATEGORY_EMOJIS}
+          statusColors={STATUS_COLORS}
+        />
 
-        {/* Selected Issue Overlay */}
+        {/* Selected Issue Floating Card on Map */}
         {selectedIssue && (
-          <TouchableOpacity 
-            style={styles.mapIdBadge}
-            onPress={() => openMaps(selectedIssue)}
-          >
-            <Text style={styles.mapIdText} numberOfLines={1}>
-              {selectedIssue.title}
-            </Text>
-            <Text style={styles.calloutLink}>Tap to navigate ↗</Text>
-          </TouchableOpacity>
+          <View style={styles.floatingCard}>
+            <View style={styles.floatingCardContent}>
+              <Text style={{ fontSize: 20 }}>
+                {CATEGORY_EMOJIS[selectedIssue.category] ?? '📌'}
+              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.floatingCardTitle} numberOfLines={1}>
+                  {selectedIssue.title}
+                </Text>
+                <Text style={styles.floatingCardSubtitle} numberOfLines={1}>
+                  {selectedIssue.location_address || 'Current Location'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.floatingCardActions}>
+              <TouchableOpacity
+                style={styles.navigateButton}
+                onPress={() => openMaps(selectedIssue)}>
+                <Ionicons name="navigate-circle" size={18} color="#FFFFFF" />
+                <Text style={styles.navigateButtonText}>Navigate</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.closeCardButton}
+                onPress={() => setSelectedIssue(null)}>
+                <Ionicons name="close" size={16} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
       </View>
 
       {/* Category Filters */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filtersContainer}
-        contentContainerStyle={styles.filtersContent}>
-        {categories.map((cat) => (
-          <TouchableOpacity
-            key={cat}
-            style={[styles.filterChip, selectedCategory === cat && styles.filterChipActive]}
-            onPress={() => setSelectedCategory(cat)}>
-            <Text style={[styles.filterText, selectedCategory === cat && styles.filterTextActive]}>
-              {cat === 'All' ? '🌐 All' : `${CATEGORY_EMOJIS[cat] ?? '📌'} ${cat}`}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {!isMapExpanded && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filtersContainer}
+          contentContainerStyle={styles.filtersContent}>
+          {categories.map((cat) => (
+            <TouchableOpacity
+              key={cat}
+              style={[styles.filterChip, selectedCategory === cat && styles.filterChipActive]}
+              onPress={() => setSelectedCategory(cat)}>
+              <Text style={[styles.filterText, selectedCategory === cat && styles.filterTextActive]}>
+                {cat === 'All' ? '🌐 All' : `${CATEGORY_EMOJIS[cat] ?? '📌'} ${cat}`}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
 
       {/* Issues List */}
-      <ScrollView
-        style={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1a3c70" />}>
-        <Text style={styles.listTitle}>Reported Issues</Text>
+      {!isMapExpanded && (
+        <ScrollView
+          style={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1a3c70" />}>
+          <Text style={styles.listTitle}>Reported Issues</Text>
 
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#1a3c70" />
-            <Text style={styles.loadingText}>Fetching issues from database...</Text>
-          </View>
-        ) : issues.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyEmoji}>📭</Text>
-            <Text style={styles.emptyTitle}>No issues reported yet</Text>
-            <Text style={styles.emptySubtitle}>Community issues will appear here once reported.</Text>
-            <TouchableOpacity
-              style={styles.emptyButton}
-              onPress={() => router.push('/(tabs)/report')}>
-              <Text style={styles.emptyButtonText}>+ Report First Issue</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#1a3c70" />
+              <Text style={styles.loadingText}>Fetching issues from database...</Text>
+            </View>
+          ) : issues.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyEmoji}>📭</Text>
+              <Text style={styles.emptyTitle}>No issues reported yet</Text>
+              <Text style={styles.emptySubtitle}>Community issues will appear here once reported.</Text>
+              <TouchableOpacity
+                style={styles.emptyButton}
+                onPress={() => router.push('/(tabs)/report')}>
+                <Text style={styles.emptyButtonText}>+ Report First Issue</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
 
-        {!loading && filtered.map((issue) => {
-          const statusStyle = STATUS_COLORS[issue.status] ?? STATUS_COLORS.open;
-          return (
-            <TouchableOpacity
-              key={issue.id}
-              style={[styles.issueCard, selectedIssue?.id === issue.id && styles.issueCardSelected]}
-              onPress={() => setSelectedIssue(issue === selectedIssue ? null : issue)}>
-              <View style={styles.issueCardLeft}>
-                <View style={styles.issueCategoryIcon}>
-                  <Text style={{ fontSize: 22 }}>{CATEGORY_EMOJIS[issue.category] ?? '📌'}</Text>
+          {!loading && filtered.map((issue) => {
+            const statusStyle = STATUS_COLORS[issue.status] ?? STATUS_COLORS.open;
+            return (
+              <TouchableOpacity
+                key={issue.id}
+                style={[styles.issueCard, selectedIssue?.id === issue.id && styles.issueCardSelected]}
+                onPress={() => setSelectedIssue(issue === selectedIssue ? null : issue)}>
+                <View style={styles.issueCardLeft}>
+                  <View style={styles.issueCategoryIcon}>
+                    <Text style={{ fontSize: 22 }}>{CATEGORY_EMOJIS[issue.category] ?? '📌'}</Text>
+                  </View>
+                  <View style={styles.issueInfo}>
+                    <Text style={styles.issueTitle} numberOfLines={1}>{issue.title}</Text>
+                    <Text style={styles.issueLocation} numberOfLines={1}>
+                      📍 {issue.location_address ?? 'Unknown location'}
+                    </Text>
+                    <Text style={styles.issueTime}>{formatTimeAgo(issue.created_at)}</Text>
+                  </View>
                 </View>
-                <View style={styles.issueInfo}>
-                  <Text style={styles.issueTitle} numberOfLines={1}>{issue.title}</Text>
-                  <Text style={styles.issueLocation} numberOfLines={1}>
-                    📍 {issue.location_address ?? 'Unknown location'}
+                <View style={[styles.statusPill, { backgroundColor: statusStyle.bg }]}>
+                  <Text style={[styles.statusPillText, { color: statusStyle.text }]}>
+                    {statusStyle.label}
                   </Text>
-                  <Text style={styles.issueTime}>{formatTimeAgo(issue.created_at)}</Text>
                 </View>
-              </View>
-              <View style={[styles.statusPill, { backgroundColor: statusStyle.bg }]}>
-                <Text style={[styles.statusPillText, { color: statusStyle.text }]}>
-                  {statusStyle.label}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-        <View style={{ height: 20 }} />
-      </ScrollView>
+              </TouchableOpacity>
+            );
+          })}
+          <View style={{ height: 20 }} />
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -239,75 +250,93 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
   headerTitle: { fontSize: 20, fontWeight: '800', color: '#0F1B35' },
   headerSubtitle: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  expandButton: {
+    backgroundColor: '#F1F5F9',
+    padding: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   reportButton: {
     backgroundColor: '#1a3c70',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 10,
+    justifyContent: 'center',
   },
   reportButtonText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 
-  mapContainer: { height: 260, backgroundColor: '#E8F4F8' },
-  mapPlaceholder: {
-    flex: 1,
-    backgroundColor: '#E8F4F8',
-    position: 'relative',
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mapBg: { fontSize: 80, opacity: 0.15, position: 'absolute' },
-  pinDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  pinSelected: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderColor: '#fff',
-    borderWidth: 3,
-  },
-  pinEmoji: { fontSize: 16 },
-  calloutContainer: {
-    width: 140,
-    padding: 6,
-    alignItems: 'center',
-  },
-  calloutTitle: { fontSize: 13, fontWeight: '700', color: '#0F1B35', marginBottom: 2 },
-  calloutStatus: { fontSize: 11, color: '#64748B', marginBottom: 4 },
-  calloutLink: { fontSize: 11, color: '#1a3c70', fontWeight: '600' },
-  mapIdBadge: {
+  mapContainer: { height: 320, backgroundColor: '#E8F4F8', position: 'relative' },
+  mapContainerExpanded: { flex: 1, height: undefined },
+
+  floatingCard: {
     position: 'absolute',
-    top: 10,
-    left: 10,
-    backgroundColor: '#1a3c70',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    bottom: 12,
+    left: 12,
+    right: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    zIndex: 30,
   },
-  mapIdText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  floatingCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    marginRight: 8,
+  },
+  floatingCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  floatingCardSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  floatingCardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  navigateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  navigateButtonText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  closeCardButton: {
+    padding: 6,
+  },
 
   // Filters
-  filtersContainer: { maxHeight: 56, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  filtersContent: { paddingHorizontal: 16, paddingVertical: 10, gap: 8, flexDirection: 'row' },
+  filtersContainer: { maxHeight: 54, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  filtersContent: { paddingHorizontal: 16, paddingVertical: 8, gap: 8, flexDirection: 'row' },
   filterChip: {
     paddingHorizontal: 14,
     paddingVertical: 6,

@@ -1,6 +1,16 @@
-# Welcome to your Expo app 👋
+### 🔮 Future Feature: Admin & Municipal Authority Dashboard
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A dedicated Admin/Municipal Authority Dashboard can be introduced in a future version to help authorities efficiently manage, track, and resolve reported civic issues.
+
+**Planned capabilities:**
+- **Role-Based Access** — Separate access for administrators and municipal officials using role-based permissions.
+- **Issue Lifecycle Management** — Track issues through **Open → In Progress → Resolved → Closed**.
+- **Department Dispatch** — Assign complaints to relevant departments such as **Sanitation, Roads, Electricity, and Water**.
+- **Resolution Proof** — Allow officials to upload **“After” photos** as evidence that an issue has been resolved.
+- **Analytics & Metrics** — Monitor total complaints, resolved issues, average resolution time, pending issues, and critical-priority alerts.
+- **Authority Dashboard** — Provide a centralized view of active, pending, assigned, and completed civic issues.
+
+This feature will be considered for a **future release** to strengthen coordination between citizens and municipal authorities and improve accountability in issue resolution.
 
 ## Get started
 
